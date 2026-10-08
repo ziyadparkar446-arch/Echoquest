@@ -9,7 +9,7 @@ import { WelcomeIntroOverlay } from './components/WelcomeIntroOverlay';
 import { StickerEntry } from './components/StickerBookModal';
 import { CharacterGender, OutfitColor, GamePage } from './types';
 import { hapticFeedback } from './utils/haptics';
-import { elevenLabsVoiceManager } from './services/elevenLabsService';
+import { geminiVoiceManager } from './services/geminiVoiceService';
 import { voiceRecognitionService } from './services/voiceRecognitionService';
 import { LocalityGoogleMap, LocalityWaypoint } from './components/LocalityGoogleMap';
 import {
@@ -531,10 +531,10 @@ export default function App() {
                 hapticFeedback.startPlaying();
                 setCurrentPage('playing');
                 voiceRecognitionService.startListening();
-                elevenLabsVoiceManager.speak(
+                geminiVoiceManager.speak(
                   'Expedition protocol initiated. Put on your earphones, place your phone securely in your pocket, and let us explore. All guidance is verbal. Speak your commands directly into your mic without touching the screen. I am tracking your movement.',
                   {
-                    voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+                    voiceId: geminiVoiceManager.getSelectedVoiceId(),
                   }
                 );
               }}
@@ -614,9 +614,9 @@ export default function App() {
                   hapticFeedback.buttonPress();
                   const coords = await movementTrackingService.requestCurrentLocation();
                   setMapFocusTrigger((prev) => prev + 1);
-                  elevenLabsVoiceManager.speak(
+                  geminiVoiceManager.speak(
                     `Centering map on your GPS coordinates: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}.`,
-                    { voiceId: elevenLabsVoiceManager.getSelectedVoiceId() }
+                    { voiceId: geminiVoiceManager.getSelectedVoiceId() }
                   );
                 }}
                 className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
@@ -698,8 +698,8 @@ export default function App() {
               },
             ]}
             onSelectWaypoint={(wp) => {
-              elevenLabsVoiceManager.speak(`Selected ${wp.name}. ${wp.description}`, {
-                voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+              geminiVoiceManager.speak(`Selected ${wp.name}. ${wp.description}`, {
+                voiceId: geminiVoiceManager.getSelectedVoiceId(),
               });
             }}
             onWaypointCompleted={() => {

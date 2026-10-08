@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, VolumeX, Radio, Compass, Footprints, Shield, Zap, Sparkles, Smartphone, ChevronRight, Headphones, Mic } from 'lucide-react';
-import { elevenLabsVoiceManager } from '../services/elevenLabsService';
+import { geminiVoiceManager } from '../services/geminiVoiceService';
 import { movementTrackingService, MovementTelemetry } from '../services/movementTrackingService';
 import { voiceRecognitionService, VoiceRecognitionState } from '../services/voiceRecognitionService';
 import { hapticFeedback } from '../utils/haptics';
@@ -48,15 +48,15 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
     }, 1200);
   };
 
-  // Trigger tactical ElevenLabs voice update in ear
+  // Trigger tactical Gemini voice update in ear
   const triggerVoiceComms = () => {
     hapticFeedback.tactileClick();
     setIsSpeakingComms(true);
-    const activeVoice = elevenLabsVoiceManager.getSelectedVoice();
+    const activeVoice = geminiVoiceManager.getSelectedVoice();
     const commsPrompt = `Explorer, your movement state is ${
       telemetry.state === 'MOVING' ? `in motion at ${telemetry.speedMps} meters per second` : 'currently at rest'
     }. Waypoint distance is ${currentDistance} meters ahead. Keep your earphones on and speak your commands verbally.`;
-    elevenLabsVoiceManager.speak(commsPrompt, {
+    geminiVoiceManager.speak(commsPrompt, {
       onEnd: () => setIsSpeakingComms(false),
     });
   };
@@ -157,7 +157,7 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
           <span>PING RADAR</span>
         </button>
 
-        {/* Tactical ElevenLabs Voice Telemetry Broadcast */}
+        {/* Tactical Gemini Neural Voice Telemetry Broadcast */}
         <button
           onClick={triggerVoiceComms}
           className={`w-full py-4 px-4 font-mono font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 border cursor-pointer ${
@@ -167,7 +167,7 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
           }`}
         >
           <Headphones className="w-5 h-5 shrink-0" />
-          <span>{isSpeakingComms ? 'COMMS TRANSMITTING...' : 'VOICE COMMS (11LABS)'}</span>
+          <span>{isSpeakingComms ? 'COMMS TRANSMITTING...' : 'VOICE COMMS (GEMINI)'}</span>
         </button>
 
         <button
@@ -200,7 +200,7 @@ export const PocketModeHUD: React.FC<PocketModeHUDProps> = ({
       {isSpeakingComms && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-[#064e3b] border border-emerald-400 text-emerald-100 px-4 py-1.5 rounded-full text-xs font-mono font-semibold tracking-wider flex items-center gap-2 shadow-lg animate-pulse">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          <span>ELEVENLABS RADIO: {elevenLabsVoiceManager.getSelectedVoice().name.toUpperCase()} SPEAKING</span>
+          <span>GEMINI AUDIO RADIO: {geminiVoiceManager.getSelectedVoice().name.toUpperCase()} SPEAKING</span>
         </div>
       )}
     </div>

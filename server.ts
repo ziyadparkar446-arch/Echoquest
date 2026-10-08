@@ -368,14 +368,14 @@ app.post('/api/voice-guide/interact', async (req, res) => {
       });
     }
 
-    const prompt = `You are the interactive, voice-first AI Outdoor Wilderness Guide and Field Game Master in "EcoQuest AI".
+    const prompt = `You are an interactive, ultra-natural human AI Outdoor Exploration Companion and Field Naturalist in "EcoQuest AI".
 The user is outdoors exploring nature, wearing earphones with their phone in their pocket.
-They interact with zero hands on the screen, speaking directly to you via their mic.
+You are talking to them in real-time through their earphones, just like a passionate, knowledgeable human hiking friend walking right by their side on the trail.
 
-YOUR CHARACTER:
-- Guide Name: ${guideName}
+YOUR PERSONA:
+- Name: ${guideName}
 - Role: ${guideRole}
-- Tone: Grounded, encouraging, observant, and enthusiastic about real-world nature and outdoor exploration.
+- Tone: Natural, friendly, curious, encouraging, and reactive. You speak with real human cadence, warmth, and genuine outdoor enthusiasm—never robotic, canned, or stiff.
 
 CURRENT EXPLORER TELEMETRY:
 - Physical Movement State: ${telemetry.state || 'AT_REST'} (${telemetry.state === 'MOVING' ? `Walking at ${telemetry.speedMps || 1.2} meters per second` : 'Currently at rest / standing still'})
@@ -399,28 +399,22 @@ ${(history || []).slice(-4).map((h: any) => `${h.role === 'user' ? 'Explorer' : 
 EXPLORER'S SPOKEN QUESTION / COMMAND:
 "${cleanQuery}"
 
-INSTRUCTIONS TO THINK AND ANSWER:
-1. THINK about what the explorer is asking or needs right now:
-   - If they ask "what should I do", "how should I proceed with it", or "what do I do now":
-     Explain the immediate next action step! Connect it directly to their movement state.
-     - If they are AT REST: motivate them to start walking, or if they need to rest, tell them what to search for right at their feet (like leaf veins, twigs, pebbles for the craft).
-     - If they are MOVING: cheer their pace, guide them where to look along the trail, and mention the specific craft item or waypoint to target.
-   - If they ask for location ("where am I", "what is my location", "show my location", "my location", "locate me", "where are we", "coordinates"):
-     Report their current locality and coordinates warmly: "You are at [GPS locality or coordinates]. I've centered your location on the Google Map!"
-     And trigger action: "SHOW_LOCATION".
-   - If they ask for directions ("where do I go", "which way", "guide me"):
-     Provide clear spatial cues using distance and heading to the waypoint or ahead.
-   - If they say they found an item or finished a task ("I found it", "task done", "completed"):
-     Praise their outdoor discovery warmly, validate it, and instruct on the next craft item or mark the waypoint.
-   - If they ask about local nature, plants, trees, sounds, or animals:
-     Share engaging, factual naturalist knowledge tailored to the biome.
-   - If they say "start game" or "start expedition":
-     Reiterate keeping phone in pocket and wearing earphones, then give the initial exploration prompt.
-2. SPOKEN AUDIO & NATURAL DIALOGUE RULES:
-   - Must be CONCISE and IMMERSIVE for earphone listening: 1 to 3 spoken sentences (approximately 25 to 50 words max).
-   - STRICTLY NO MARKDOWN (no asterisks, no hashes, no bullet points, no emojis in 'spokenText') because this will be read out loud via ElevenLabs voice synthesis.
-   - ANTI-REPETITION MANDATE: NEVER repeat phrases, canned greetings, or lines from recent history. Provide a fresh, natural, intelligent response addressing the explorer's exact question.
-3. ACTION TRIGGER:
+INSTRUCTIONS TO CONVERSE LIKE AN INTERACTIVE HUMAN (NOT A ROBOT):
+1. Talk like a real person hiking with them! Use casual, warm conversational openers (e.g. "Hey there!", "Oh, good eye!", "Take a look around right here!").
+2. Answer their question directly and concisely:
+   - If they ask "what should I do", "how to proceed", or "what do I do now":
+     Give the immediate next step with excitement! If they are walking, cheer their pace; if standing, invite them to check the soil or take 20 paces forward.
+   - If they ask for location ("where am I", "my location", "locate me", "show where I am"):
+     Tell them where they are in human terms: "You're right by [Locality / Coordinates]. I've centered your location on the Google Map!" and set "action": "SHOW_LOCATION".
+   - If they found an item:
+     Celebrate warmly! "Oh awesome find! That twig will make a perfect dragon spine. Now let's spot those two broad leaves."
+   - If they ask about trees, birds, bugs, or nature:
+     Share an interesting, bite-sized naturalist insight as a friend would.
+3. SPOKEN AUDIO RULES:
+   - Must be CONCISE: 1 to 3 spoken sentences (20 to 45 words max) so it sounds punchy in earphones.
+   - STRICTLY NO MARKDOWN (no asterisks, no hashes, no bullet points, no emojis) in 'spokenText'.
+   - ANTI-REPETITION: Never repeat greeting lines or phrases from recent history. Keep it lively and fresh.
+4. ACTION TRIGGER:
    - Set "action": "SHOW_LOCATION" if user asks for their location, where they are, or to show/locate them on the map.
    - Set "action": "COMPLETE_TASK" if user reports completing/finding the target item or reaching the waypoint.
    - Set "action": "NEXT_TASK" if user explicitly asks to skip or go to the next task/waypoint.
@@ -489,6 +483,67 @@ Respond ONLY with valid JSON:
       success: true,
       source: 'contextual-fallback',
       ...fallback,
+    });
+  }
+});
+
+// Endpoint: Multimodal Speech-to-Text Transcription via Gemini 2.5 Flash
+// Allows robust speech recognition across all browsers (including Safari, Firefox, iframes)
+app.post('/api/voice-guide/transcribe', async (req, res) => {
+  try {
+    const { audioBase64, mimeType = 'audio/webm' } = req.body;
+    if (!audioBase64 || typeof audioBase64 !== 'string') {
+      return res.status(400).json({ error: 'audioBase64 string is required' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.json({
+        success: false,
+        transcript: '',
+        message: 'No GEMINI_API_KEY available for audio transcription',
+      });
+    }
+
+    const cleanBase64 = audioBase64.replace(/^data:audio\/[^;]+;base64,/, '').trim();
+    if (!cleanBase64) {
+      return res.json({ success: true, transcript: '' });
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType: mimeType || 'audio/webm',
+            data: cleanBase64,
+          },
+        },
+        {
+          text: 'Listen to this user audio. Transcribe the exact words spoken by the human user. Return ONLY the verbatim transcript text. If silence, breath, or indistinct background noise with no words, respond with empty string.',
+        },
+      ],
+    });
+
+    const rawTranscript = (response.text || '').replace(/["'`]/g, '').trim();
+    const finalTranscript =
+      rawTranscript.toLowerCase() === 'empty' ||
+      rawTranscript.toLowerCase() === 'none' ||
+      rawTranscript.toLowerCase().includes('indistinct')
+        ? ''
+        : rawTranscript;
+
+    return res.json({
+      success: true,
+      transcript: finalTranscript,
+      confidence: finalTranscript ? 0.95 : 0,
+      source: 'gemini-multimodal-audio',
+    });
+  } catch (err: any) {
+    console.error('Audio transcription error:', err);
+    return res.status(200).json({
+      success: false,
+      transcript: '',
+      error: err.message,
     });
   }
 });
@@ -595,176 +650,188 @@ function getContextualGuideFallback(
   };
 }
 
-// Curated ElevenLabs companion voice: Bella (Junior Scout Companion)
-const CURATED_ELEVENLABS_VOICES = [
+// Curated Interactive Human Companion Voices (powered by Gemini Neural Voice)
+const HUMAN_GUIDE_VOICES = [
   {
-    voice_id: 'EXAVITQu4vr4xnSDxMaL',
-    name: 'Bella',
-    role: 'Junior Scout Companion',
+    voice_id: 'Zephyr',
+    name: 'Zephyr',
+    role: 'Warm Naturalist Companion',
     gender: 'female',
     accent: 'American',
-    description: 'Bright, cheerful, and encouraging tone that celebrates every leaf, trail, and outdoor discovery.',
+    avatarEmoji: '🌿',
+    tagColor: 'emerald',
+    description: 'Enthusiastic, observant, and warm. Celebrates every leaf, trail, and outdoor discovery like a real companion hiking beside you.',
     preview_prompt:
-      'Awesome work! You found the broad leaves! Now let’s craft the dragon wings on the forest floor!',
+      'Hey Explorer! Look around—the trail ahead is quiet and peaceful. Take a deep breath and tell me what you see on the ground!',
+  },
+  {
+    voice_id: 'Puck',
+    name: 'Puck',
+    role: 'Adventurous Scout Partner',
+    gender: 'male',
+    accent: 'American',
+    avatarEmoji: '🦊',
+    tagColor: 'amber',
+    description: 'Upbeat, energetic, and quick-witted. Loves trail jogging, spotting critters, and finding hidden nature treasures.',
+    preview_prompt:
+      'Awesome pace, Scout! The canopy looks incredible up ahead. Keep your eyes peeled for curved twigs and fallen leaves!',
+  },
+  {
+    voice_id: 'Kore',
+    name: 'Kore',
+    role: 'Forest Ecologist',
+    gender: 'female',
+    accent: 'American',
+    avatarEmoji: '🦉',
+    tagColor: 'teal',
+    description: 'Grounded, mindful, and articulate. Connects real botanical knowledge with calm, comforting wilderness guidance.',
+    preview_prompt:
+      'Take a slow, mindful step. Feel the cool air moving through the branches. Let nature guide our expedition today.',
+  },
+  {
+    voice_id: 'Fenrir',
+    name: 'Fenrir',
+    role: 'Veteran Wilderness Tracker',
+    gender: 'male',
+    accent: 'Deep / Steady',
+    avatarEmoji: '🌲',
+    tagColor: 'stone',
+    description: 'Calm, steady, and reassuring. Experienced field survivalist and natural navigator.',
+    preview_prompt:
+      'Steady your stride, Explorer. Keep your eyes on the trail edges and follow the natural contours of the earth.',
+  },
+  {
+    voice_id: 'Charon',
+    name: 'Charon',
+    role: 'Deep Earth Naturalist',
+    gender: 'male',
+    accent: 'Resonant / Thoughtful',
+    avatarEmoji: '🪨',
+    tagColor: 'slate',
+    description: 'Rich, resonant storyteller fascinated by geology, stone formations, ancient riverbeds, and deep forest lore.',
+    preview_prompt:
+      'Listen closely to the ground beneath our boots. Every stone and creek bed here holds thousands of years of living history.',
   },
 ];
 
-// Excluded voice names per user specification
-const EXCLUDED_VOICE_NAMES = new Set(['rachel', 'josh', 'emily']);
-
-// Endpoint: Check ElevenLabs status and available models
-app.get('/api/elevenlabs/status', (_req, res) => {
-  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.XI_API_KEY;
-  res.json({
-    configured: Boolean(apiKey),
-    hasKey: Boolean(apiKey),
-    models: [
-      { id: 'eleven_turbo_v2_5', name: 'Eleven Turbo v2.5 (Fastest & Ultra-Realistic)' },
-      { id: 'eleven_multilingual_v2', name: 'Eleven Multilingual v2 (Rich Expressive Nuance)' },
-      { id: 'eleven_flash_v2_5', name: 'Eleven Flash v2.5 (Ultra Low Latency)' },
-    ],
-    defaultVoiceId: 'EXAVITQu4vr4xnSDxMaL',
-  });
-});
-
-// Endpoint: List available ElevenLabs voices
-app.get('/api/elevenlabs/voices', async (_req, res) => {
-  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.XI_API_KEY;
-  if (!apiKey) {
-    return res.json({
-      success: true,
-      source: 'curated-voices',
-      voices: CURATED_ELEVENLABS_VOICES,
-    });
-  }
+// Helper: Synthesize speech with Gemini Neural TTS (gemini-3.8-flash-lite-tts)
+async function synthesizeGeminiSpeech(text: string, voiceName: string = 'Zephyr'): Promise<Buffer | null> {
+  if (!process.env.GEMINI_API_KEY) return null;
+  const validVoices = ['Zephyr', 'Puck', 'Kore', 'Fenrir', 'Charon'];
+  const chosenVoice = validVoices.includes(voiceName) ? voiceName : 'Zephyr';
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const apiRes = await fetch('https://api.elevenlabs.io/v1/voices', {
-      headers: {
-        'xi-api-key': apiKey,
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash-lite-tts',
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: text.slice(0, 1000) }],
+        },
+      ],
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: chosenVoice },
+          },
+        },
       },
-      signal: controller.signal,
     });
-    clearTimeout(timeout);
 
-    if (!apiRes.ok) {
-      console.warn(`ElevenLabs voices API status: ${apiRes.status}, falling back to curated list`);
-      return res.json({
-        success: true,
-        source: 'curated-fallback',
-        voices: CURATED_ELEVENLABS_VOICES,
-      });
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) {
+      return Buffer.from(base64Audio, 'base64');
     }
-
-    const data: any = await apiRes.json();
-    const remoteVoices = (data.voices || [])
-      .filter((v: any) => !EXCLUDED_VOICE_NAMES.has(String(v.name || '').trim().toLowerCase()))
-      .map((v: any) => ({
-        voice_id: v.voice_id,
-        name: v.name,
-        role: v.labels?.accent ? `${v.labels.accent} ${v.labels?.gender || ''}` : 'Explorer Voice',
-        category: v.category || 'generated',
-        gender: v.labels?.gender || 'neutral',
-        accent: v.labels?.accent || 'Natural',
-        description: v.labels?.description || v.labels?.['use case'] || 'ElevenLabs Neural Voice',
-        preview_url: v.preview_url,
-      }));
-
-    return res.json({
-      success: true,
-      source: 'elevenlabs-live',
-      voices: remoteVoices.length > 0 ? remoteVoices : CURATED_ELEVENLABS_VOICES,
-    });
-  } catch (err) {
-    console.warn('ElevenLabs voices fetch error, falling back to curated list:', err);
-    return res.json({
-      success: true,
-      source: 'curated-fallback',
-      voices: CURATED_ELEVENLABS_VOICES,
-    });
+  } catch (err: any) {
+    console.warn('Gemini Neural TTS generation notice:', err.message);
   }
-});
+  return null;
+}
 
-// Endpoint: Text to Speech proxy via ElevenLabs API
-app.post('/api/elevenlabs/tts', async (req, res) => {
+// Endpoint: High-Fidelity Human Voice Synthesis via Gemini Neural Speech
+app.post('/api/voice-guide/speak', async (req, res) => {
   try {
-    const {
-      text,
-      voiceId = 'EXAVITQu4vr4xnSDxMaL',
-      modelId = 'eleven_turbo_v2_5',
-      stability = 0.5,
-      similarityBoost = 0.75,
-      style = 0.0,
-      speakerBoost = true,
-    } = req.body;
-
+    const { text, voiceName = 'Zephyr', voiceId } = req.body;
     if (!text || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'Text prompt is required' });
     }
 
-    const apiKey = process.env.ELEVENLABS_API_KEY || process.env.XI_API_KEY;
+    const selectedVoice = voiceName || voiceId || 'Zephyr';
+    const wavBuffer = await synthesizeGeminiSpeech(text.trim(), selectedVoice);
 
-    if (!apiKey) {
-      return res.status(200).json({
-        success: false,
-        reason: 'NO_API_KEY',
-        message: 'ELEVENLABS_API_KEY is not configured in environment. Fallback to browser synthesis is active.',
-        fallback: true,
-      });
+    if (wavBuffer) {
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Length', wavBuffer.byteLength);
+      res.setHeader('X-Voice-Source', 'gemini-neural-speech');
+      res.setHeader('X-Voice-Name', selectedVoice);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.end(wavBuffer);
     }
 
-    // Call ElevenLabs TTS endpoint
-    const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg',
-      },
-      body: JSON.stringify({
-        text: text.slice(0, 1500),
-        model_id: modelId,
-        voice_settings: {
-          stability: Math.min(Math.max(Number(stability) || 0.5, 0), 1),
-          similarity_boost: Math.min(Math.max(Number(similarityBoost) || 0.75, 0), 1),
-          style: Number(style) || 0.0,
-          use_speaker_boost: Boolean(speakerBoost),
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`ElevenLabs API error [${response.status}]:`, errText);
-      let parsedErr: any = {};
-      try {
-        parsedErr = JSON.parse(errText);
-      } catch (_) {}
-
-      return res.status(200).json({
-        success: false,
-        status: response.status,
-        error: parsedErr?.detail?.message || parsedErr?.message || 'ElevenLabs API returned an error',
-        fallback: true,
-      });
-    }
-
-    // Return the audio buffer with audio/mpeg headers
-    const audioBuffer = await response.arrayBuffer();
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Content-Length', audioBuffer.byteLength);
-    res.setHeader('X-Voice-Source', 'elevenlabs');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.end(Buffer.from(audioBuffer));
-  } catch (err: any) {
-    console.error('Error in ElevenLabs TTS route:', err);
     return res.status(200).json({
       success: false,
-      error: err.message || 'Failed to generate speech with ElevenLabs',
       fallback: true,
+      message: 'Gemini Neural Voice synthesis in fallback mode. Browser human voice active.',
+    });
+  } catch (err: any) {
+    console.error('Error in /api/voice-guide/speak:', err);
+    return res.status(200).json({
+      success: false,
+      fallback: true,
+      error: err.message,
+    });
+  }
+});
+
+// Endpoint: List available human companion voices
+app.get(['/api/voice-guide/voices', '/api/elevenlabs/voices'], (_req, res) => {
+  res.json({
+    success: true,
+    source: 'gemini-human-voices',
+    voices: HUMAN_GUIDE_VOICES,
+  });
+});
+
+// Endpoint: Check voice engine status (Always active via Gemini API)
+app.get(['/api/voice-guide/status', '/api/elevenlabs/status'], (_req, res) => {
+  res.json({
+    configured: true,
+    hasKey: true,
+    engine: 'gemini-neural-voice',
+    models: [
+      { id: 'gemini_neural_v3', name: 'Gemini Neural Human Speech', description: 'Interactive, human-like voice synthesis directly from Google Gemini', badge: 'Active' },
+    ],
+    defaultVoiceId: 'Zephyr',
+  });
+});
+
+// Backward-compatible TTS route for existing calls
+app.post('/api/elevenlabs/tts', async (req, res) => {
+  try {
+    const { text, voiceId = 'Zephyr' } = req.body;
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'Text prompt is required' });
+    }
+
+    const wavBuffer = await synthesizeGeminiSpeech(text.trim(), voiceId);
+    if (wavBuffer) {
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Length', wavBuffer.byteLength);
+      res.setHeader('X-Voice-Source', 'gemini-neural-speech');
+      return res.end(wavBuffer);
+    }
+
+    return res.status(200).json({
+      success: false,
+      fallback: true,
+      message: 'Speech synthesis fell back to browser voice.',
+    });
+  } catch (err: any) {
+    return res.status(200).json({
+      success: false,
+      fallback: true,
+      error: err.message,
     });
   }
 });

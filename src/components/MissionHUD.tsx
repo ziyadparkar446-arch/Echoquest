@@ -21,18 +21,20 @@ import {
   Footprints,
   MapPin,
   Compass,
-  X
+  X,
+  Send
 } from 'lucide-react';
 import { CharacterGender, OutfitColor } from '../types';
 import { CharacterCanvas } from './CharacterCanvas';
 import { PhotoScavengerModal } from './PhotoScavengerModal';
 import { StickerBookModal, StickerEntry } from './StickerBookModal';
 import {
-  elevenLabsVoiceManager,
-  ElevenLabsVoice,
-  CURATED_VOICES,
+  geminiVoiceManager,
+  HumanVoice,
+  HUMAN_VOICES,
   PlaybackState
-} from '../services/elevenLabsService';
+} from '../services/geminiVoiceService';
+import { InteractiveVoiceModal } from './InteractiveVoiceModal';
 import {
   GeneratedMission,
   generateOutdoorMission,
@@ -102,17 +104,17 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
 
   // Audio Playback & Active Speaker State
   const [playbackState, setPlaybackState] = useState<PlaybackState>(
-    elevenLabsVoiceManager.getState()
+    geminiVoiceManager.getState()
   );
-  const [activeVoice, setActiveVoice] = useState<ElevenLabsVoice>(
-    elevenLabsVoiceManager.getSelectedVoice()
+  const [activeVoice, setActiveVoice] = useState<HumanVoice>(
+    geminiVoiceManager.getSelectedVoice()
   );
   const isPlayingAudio = playbackState.status === 'playing';
 
   useEffect(() => {
-    const unsub = elevenLabsVoiceManager.subscribe((state) => {
+    const unsub = geminiVoiceManager.subscribe((state) => {
       setPlaybackState(state);
-      setActiveVoice(elevenLabsVoiceManager.getSelectedVoice());
+      setActiveVoice(geminiVoiceManager.getSelectedVoice());
     });
     return () => unsub();
   }, []);
@@ -133,8 +135,8 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
   // Movement auto-verbal cues into earphones (Registered once, no leak)
   useEffect(() => {
     const unsubPrompts = movementTrackingService.onVerbalPrompt((promptText, reason) => {
-      elevenLabsVoiceManager.speak(promptText, {
-        voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+      geminiVoiceManager.speak(promptText, {
+        voiceId: geminiVoiceManager.getSelectedVoiceId(),
       });
       setLatestAgentSpeech(promptText);
       setLatestAgentThought(`Movement guidance: ${reason}`);
@@ -249,6 +251,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
   const [samplePlayingVoiceId, setSamplePlayingVoiceId] = useState<string | null>(null);
   const [focusLocationTrigger, setFocusLocationTrigger] = useState(0);
+  const [textQuery, setTextQuery] = useState('');
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
   const isProcessingRef = useRef(false);
@@ -295,7 +298,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
         } catch (_) {}
       }
 
-      const currentVoice = elevenLabsVoiceManager.getSelectedVoice();
+      const currentVoice = geminiVoiceManager.getSelectedVoice();
       const recentHistory = conversationHistory.slice(-4).map((m) => ({
         role: m.role,
         text: m.text,
@@ -363,8 +366,8 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
         { role: 'assistant', text: spokenText, thought, timestamp: Date.now() },
       ]);
 
-      // Speak directly into user's earphones via ElevenLabs
-      await elevenLabsVoiceManager.speak(spokenText, {
+      // Speak directly into user's earphones via Gemini Neural Voice
+      await geminiVoiceManager.speak(spokenText, {
         voiceId: currentVoice.voice_id,
       });
 
@@ -386,7 +389,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
       }. Check the soil for broad leaves and dry twigs to assemble the dragon.`;
       setLatestAgentSpeech(fallback);
       setLatestAgentThought('Contextual offline fallback applied');
-      await elevenLabsVoiceManager.speak(fallback);
+      await geminiVoiceManager.speak(fallback);
     } finally {
       setIsAiThinking(false);
       isProcessingRef.current = false;
@@ -437,35 +440,35 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
       setLatestAgentSpeech(startPrompt);
       setLatestAgentThought('Initial outdoor briefing broadcasted to earphones');
 
-      await elevenLabsVoiceManager.speak(startPrompt, {
+      await geminiVoiceManager.speak(startPrompt, {
         voiceId: activeVoice.voice_id,
       });
     } else {
       setIsExpeditionStarted(false);
       voiceRecognitionService.stopListening();
-      elevenLabsVoiceManager.stop();
+      geminiVoiceManager.stop();
       const pausePrompt = 'Expedition paused. Microphones are now on standby.';
       setLatestAgentSpeech(pausePrompt);
       setLatestAgentThought('Expedition placed on standby');
-      await elevenLabsVoiceManager.speak(pausePrompt);
+      await geminiVoiceManager.speak(pausePrompt);
     }
   };
 
   const handlePlayLatestSpeech = async () => {
     hapticFeedback.tactileClick();
     if (isPlayingAudio) {
-      elevenLabsVoiceManager.stop();
+      geminiVoiceManager.stop();
     } else {
-      await elevenLabsVoiceManager.speak(latestAgentSpeech, {
+      await geminiVoiceManager.speak(latestAgentSpeech, {
         voiceId: activeVoice.voice_id,
       });
     }
   };
 
   // Speaker change handler with instant audio sample preview
-  const handleSelectSpeaker = async (voice: ElevenLabsVoice) => {
+  const handleSelectSpeaker = async (voice: HumanVoice) => {
     hapticFeedback.tactileClick();
-    elevenLabsVoiceManager.setSelectedVoiceId(voice.voice_id);
+    geminiVoiceManager.setSelectedVoiceId(voice.voice_id);
     setActiveVoice(voice);
 
     // Play quick introduction sample in this guide's voice
@@ -476,7 +479,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
         `Greetings explorer. I am ${voice.name}, your ${voice.role}. I will guide you outdoors through your earphones.`;
       setLatestAgentSpeech(sampleText);
       setLatestAgentThought(`Switched active speaker to ${voice.name}`);
-      await elevenLabsVoiceManager.speak(sampleText, {
+      await geminiVoiceManager.speak(sampleText, {
         voiceId: voice.voice_id,
       });
     } finally {
@@ -498,7 +501,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
       const announce = `New expedition mission received: ${newMission.title}. ${newMission.audioScript}`;
       setLatestAgentSpeech(announce);
       setLatestAgentThought('New mission received from Gemini Game Master');
-      await elevenLabsVoiceManager.speak(announce, {
+      await geminiVoiceManager.speak(announce, {
         voiceId: activeVoice.voice_id,
       });
     } catch (err) {
@@ -827,7 +830,7 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
               {voiceRecognitionState.isListening ? (
                 <>
                   <Mic className="w-4 h-4 text-stone-50 animate-bounce" />
-                  <span>MIC LIVE · SPEAK FREELY</span>
+                  <span>MIC LIVE · LISTENING TO YOU</span>
                 </>
               ) : (
                 <>
@@ -845,6 +848,65 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
               <span>{isPlayingAudio ? 'STOP AUDIO' : 'LISTEN IN EAR'}</span>
             </button>
           </div>
+
+          {/* Live Mic Audio Meter & Hearing Feedback */}
+          {voiceRecognitionState.isListening && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-600/40 text-xs font-mono text-emerald-900 animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5, 6].map((i) => {
+                    const active = (voiceRecognitionState.audioLevel || 0) > i * 14;
+                    return (
+                      <div
+                        key={i}
+                        className={`w-1 rounded-full transition-all duration-75 ${
+                          active ? 'h-3.5 bg-emerald-600' : 'h-1.5 bg-stone-300'
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+                <span className="font-bold">
+                  {voiceRecognitionState.audioLevel > 14 ? 'Receiving voice audio...' : 'Microphone open — speak freely'}
+                </span>
+              </div>
+              {voiceRecognitionState.interimTranscript ? (
+                <span className="italic text-emerald-700 max-w-[200px] truncate font-medium">
+                  "{voiceRecognitionState.interimTranscript}"
+                </span>
+              ) : (
+                <span className="text-[10px] text-stone-500 font-semibold">Gemini Audio Ready</span>
+              )}
+            </div>
+          )}
+
+          {/* Direct Text Question Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (textQuery.trim()) {
+                handleInteractiveVoiceQuery(textQuery.trim());
+                setTextQuery('');
+              }
+            }}
+            className="flex items-center gap-2 pt-1"
+          >
+            <input
+              type="text"
+              value={textQuery}
+              onChange={(e) => setTextQuery(e.target.value)}
+              placeholder={`Ask ${activeVoice.name} verbally into mic, or type questions here...`}
+              className="flex-1 px-3 py-2 text-xs font-mono rounded-xl bg-stone-100 border border-stone-300 text-stone-900 placeholder:text-stone-500 focus:outline-none focus:border-emerald-600 shadow-inner"
+            />
+            <button
+              type="submit"
+              disabled={!textQuery.trim() || isAiThinking}
+              className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-40 text-stone-50 text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>ASK</span>
+            </button>
+          </form>
 
           {/* Quick Verbal Question Chips */}
           <div className="space-y-1">
@@ -917,108 +979,13 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
       </section>
 
       {/* =========================================================================
-          COMPACT SPEAKER SELECTION POPUP BOX (MINIMAL MOBILE POPUP MODAL)
+          INTERACTIVE AI VOICE COMPANION MODAL (GEMINI NEURAL VOICE STUDIO)
           ========================================================================= */}
-      {isVoicePickerModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={() => setIsVoicePickerModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-stone-100 rounded-3xl p-5 border border-stone-300 shadow-2xl space-y-4 font-['Plus_Jakarta_Sans',sans-serif]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-stone-300">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🎧</span>
-                <div>
-                  <h3 className="font-display font-extrabold text-base text-stone-900">
-                    Change Speaker Voice
-                  </h3>
-                  <p className="text-[11px] font-mono text-stone-500">
-                    Select your wilderness earphone guide
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsVoicePickerModalOpen(false)}
-                className="p-1.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* List of 4 Voices */}
-            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-              {CURATED_VOICES.map((voice) => {
-                const isSelected = activeVoice.voice_id === voice.voice_id;
-                const isPreviewing = samplePlayingVoiceId === voice.voice_id;
-
-                return (
-                  <div
-                    key={voice.voice_id}
-                    onClick={() => {
-                      handleSelectSpeaker(voice);
-                    }}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                      isSelected
-                        ? 'bg-stone-900 text-stone-50 border-stone-900 shadow-md'
-                        : 'bg-stone-200/90 hover:bg-stone-300/90 text-stone-900 border-stone-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{voice.avatarEmoji || '🌲'}</span>
-                      <div>
-                        <div className="font-display font-extrabold text-sm leading-tight flex items-center gap-2">
-                          <span>{voice.name}</span>
-                          {isSelected && (
-                            <span className="px-1.5 py-0.2 rounded-md bg-emerald-500 text-stone-950 text-[9px] font-mono font-bold uppercase">
-                              ACTIVE
-                            </span>
-                          )}
-                        </div>
-                        <div
-                          className={`text-[11px] font-mono font-medium ${
-                            isSelected ? 'text-emerald-400' : 'text-emerald-800'
-                          }`}
-                        >
-                          {voice.role}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Preview Voice button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectSpeaker(voice);
-                      }}
-                      className={`py-1 px-2 rounded-xl text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
-                        isSelected
-                          ? 'bg-stone-800 hover:bg-stone-700 text-emerald-400 border border-stone-700'
-                          : 'bg-stone-300 hover:bg-stone-400 text-stone-800 border border-stone-400'
-                      }`}
-                    >
-                      <Play className={`w-3 h-3 ${isPreviewing ? 'animate-spin' : ''}`} />
-                      <span>{isPreviewing ? 'Testing...' : 'Sample'}</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Close Button */}
-            <button
-              onClick={() => setIsVoicePickerModalOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-xs font-bold transition-all cursor-pointer shadow-sm"
-            >
-              DONE
-            </button>
-          </div>
-        </div>
-      )}
+      <InteractiveVoiceModal
+        isOpen={isVoicePickerModalOpen}
+        onClose={() => setIsVoicePickerModalOpen(false)}
+        activeMissionScript={activeMission.audioScript}
+      />
 
       {/* =========================================================================
           MODALS: PHOTO SCAVENGER & STICKER BOOK (OPENED ON DEMAND)

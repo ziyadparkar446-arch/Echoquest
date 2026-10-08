@@ -32,7 +32,10 @@ import {
   movementTrackingService,
   MovementTelemetry,
 } from '../services/movementTrackingService';
-import { elevenLabsVoiceManager, ElevenLabsVoice } from '../services/elevenLabsService';
+import {
+  geminiVoiceManager,
+  HumanVoice,
+} from '../services/geminiVoiceService';
 import { LocalityWaypoint } from './LocalityGoogleMap';
 import { GeneratedMission } from '../services/geminiMissionService';
 import { hapticFeedback } from '../utils/haptics';
@@ -68,8 +71,8 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
   const [voiceState, setVoiceState] = useState<VoiceRecognitionState>(
     voiceRecognitionService.getState()
   );
-  const [activeVoice, setActiveVoice] = useState<ElevenLabsVoice>(
-    elevenLabsVoiceManager.getSelectedVoice()
+  const [activeVoice, setActiveVoice] = useState<HumanVoice>(
+    geminiVoiceManager.getSelectedVoice()
   );
   const [isPocketOledActive, setIsPocketOledActive] = useState(false);
   const [hasStartedExpedition, setHasStartedExpedition] = useState(false);
@@ -89,8 +92,8 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
 
   // Update active voice when changed
   useEffect(() => {
-    const unsubVoice = elevenLabsVoiceManager.subscribe(() => {
-      setActiveVoice(elevenLabsVoiceManager.getSelectedVoice());
+    const unsubVoice = geminiVoiceManager.subscribe(() => {
+      setActiveVoice(geminiVoiceManager.getSelectedVoice());
     });
     return () => unsubVoice();
   }, []);
@@ -98,9 +101,9 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
   // Subscribe to verbal prompts triggered by movement changes (Resting / Moving)
   useEffect(() => {
     const unsubPrompts = movementTrackingService.onVerbalPrompt((promptText, reason) => {
-      // Speak verbal prompt into earphones via ElevenLabs
-      elevenLabsVoiceManager.speak(promptText, {
-        voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+      // Speak verbal prompt into earphones via Gemini Neural Voice
+      geminiVoiceManager.speak(promptText, {
+        voiceId: geminiVoiceManager.getSelectedVoiceId(),
       });
       addLogEntry('guide', promptText, `Movement trigger: ${reason}`);
     });
@@ -134,7 +137,7 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
   /**
    * Interactive AI Guide Pipeline:
    * Takes the user's verbal command or question, passes it to the AI guide endpoint,
-   * displays the thinking state, and speaks the response into the earphones using ElevenLabs.
+   * displays the thinking state, and speaks the response into the earphones using Gemini Neural Voice.
    */
   const handleInteractiveAI = async (queryText: string) => {
     if (!queryText.trim() || isProcessingRef.current) return;
@@ -146,7 +149,7 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
       setIsAiThinking(true);
       setCurrentThought(`Analyzing explorer telemetry (${telemetry.state}) and query...`);
 
-      const selectedVoice = elevenLabsVoiceManager.getSelectedVoice();
+      const selectedVoice = geminiVoiceManager.getSelectedVoice();
       const recentHistory = voiceLog.slice(0, 4).map((item) => ({
         role: item.sender === 'user' ? 'user' : 'assistant',
         text: item.text,
@@ -206,8 +209,8 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
       setCurrentThought(thought);
       addLogEntry('guide', spokenText, thought, action);
 
-      // Speak answer into user's earphones via ElevenLabs
-      await elevenLabsVoiceManager.speak(spokenText, {
+      // Speak answer into user's earphones via Gemini Neural Voice
+      await geminiVoiceManager.speak(spokenText, {
         voiceId: selectedVoice.voice_id,
       });
 
@@ -228,7 +231,7 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
         telemetry.state === 'MOVING' ? 'in motion' : 'at rest'
       }. Maintain your heading and scan the ground for your craft items.`;
       addLogEntry('guide', fallbackReply, 'Offline fallback executed');
-      await elevenLabsVoiceManager.speak(fallbackReply);
+      await geminiVoiceManager.speak(fallbackReply);
     } finally {
       setIsAiThinking(false);
       isProcessingRef.current = false;
@@ -250,7 +253,7 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
           voiceRecognitionService.stopListening();
           const stopPrompt = 'Expedition paused. Microphones are on standby.';
           addLogEntry('guide', stopPrompt);
-          await elevenLabsVoiceManager.speak(stopPrompt);
+          await geminiVoiceManager.speak(stopPrompt);
           return;
         }
 
@@ -259,7 +262,7 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
           const pocketPrompt =
             'Pocket mode activated. Screen dimmed to black. Keep walking with your earphones on.';
           addLogEntry('guide', pocketPrompt);
-          await elevenLabsVoiceManager.speak(pocketPrompt);
+          await geminiVoiceManager.speak(pocketPrompt);
           return;
         }
 
@@ -287,8 +290,8 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
 
     addLogEntry('guide', welcomeVoicePrompt, 'Initial hands-free startup prompt');
 
-    await elevenLabsVoiceManager.speak(welcomeVoicePrompt, {
-      voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+    await geminiVoiceManager.speak(welcomeVoicePrompt, {
+      voiceId: geminiVoiceManager.getSelectedVoiceId(),
     });
   };
 
@@ -384,8 +387,8 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
                 <span className="px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 text-[10px] font-mono uppercase tracking-wider font-semibold">
                   {activeVoice.role}
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-stone-800 text-stone-400 text-[10px] font-mono">
-                  ElevenLabs Turbo
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 text-[10px] font-mono">
+                  Gemini Neural Voice
                 </span>
               </div>
               <p className="text-xs text-stone-400 font-mono">
@@ -621,6 +624,33 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
             </button>
           </form>
 
+          {/* Live Mic Audio Meter & Hearing Feedback */}
+          {voiceState.isListening && (
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-xs font-mono text-emerald-400">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5, 6].map((i) => {
+                    const active = (voiceState.audioLevel || 0) > i * 14;
+                    return (
+                      <div
+                        key={i}
+                        className={`w-1 rounded-full transition-all duration-75 ${
+                          active ? 'h-3 bg-emerald-400' : 'h-1 bg-stone-700'
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+                <span className="text-[11px] font-bold">
+                  {voiceState.audioLevel > 14 ? 'Receiving sound...' : 'Mic active · speak to guide'}
+                </span>
+              </div>
+              <span className="text-[10px] text-stone-500 font-mono">
+                {voiceState.engineSource === 'web-speech' ? 'Web Speech Engine' : 'Gemini Multimodal Audio'}
+              </span>
+            </div>
+          )}
+
           {/* Live Interim Transcript Bubble */}
           {voiceState.interimTranscript && (
             <div className="px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs font-mono flex items-center gap-2 animate-pulse">
@@ -691,7 +721,7 @@ export const HandsFreeVoiceHUD: React.FC<HandsFreeVoiceHUDProps> = ({
                       <button
                         onClick={() => {
                           hapticFeedback.tactileClick();
-                          elevenLabsVoiceManager.speak(log.text, {
+                          geminiVoiceManager.speak(log.text, {
                             voiceId: activeVoice.voice_id,
                           });
                         }}

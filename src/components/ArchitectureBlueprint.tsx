@@ -5,54 +5,41 @@ export const ArchitectureBlueprint: React.FC = () => {
   const [activeSnippet, setActiveSnippet] = useState<'server' | 'spatial' | 'shader'>('server');
   const [copied, setCopied] = useState(false);
 
-  const serverSnippet = `// Render Backend Proxy: Express + ElevenLabs WebSocket Stream
+  const serverSnippet = `// Backend: Express + Google Gemini Neural Voice Synthesis
 import express from 'express';
-import { WebSocketServer, WebSocket } from 'ws';
-import http from 'http';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/api/voice-stream' });
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+});
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const VOICE_ID = 'pNInz6obpgDQGcFmaJgB'; // Adam / Chief Wilderness Ranger
+// Real-Time Human Voice Synthesis endpoint
+app.post('/api/voice-guide/speak', async (req, res) => {
+  const { text, voiceName = 'Zephyr' } = req.body;
 
-wss.on('connection', (clientWs) => {
-  console.log('Client connected for spatial voice streaming');
-
-  // Connect to ElevenLabs Real-Time WebSocket API
-  const elUri = \`wss://api.elevenlabs.io/v1/text-to-speech/\${VOICE_ID}/stream-input?model_id=eleven_turbo_v2\`;
-  const elWs = new WebSocket(elUri, {
-    headers: { 'xi-api-key': ELEVENLABS_API_KEY }
-  });
-
-  elWs.on('open', () => {
-    // Send BOS (Beginning of Stream) payload
-    elWs.send(JSON.stringify({
-      text: " ",
-      voice_settings: { stability: 0.5, similarity_boost: 0.8 },
-      generation_config: { chunk_length_schedule: [120, 160, 250, 290] }
-    }));
-  });
-
-  // Client forwards prompt from Tinker LLM
-  clientWs.on('message', (data) => {
-    const { promptText } = JSON.parse(data.toString());
-    elWs.send(JSON.stringify({ text: promptText, try_trigger_generation: true }));
-  });
-
-  // Pipe raw PCM/MP3 audio chunks back to browser Web Audio buffer
-  elWs.on('message', (audioChunk) => {
-    if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(audioChunk);
+  // Synthesize with Google Gemini Neural Voice (gemini-3.8-flash-lite-tts)
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.8-flash-lite-tts',
+    contents: [{ role: 'user', parts: [{ text }] }],
+    config: {
+      responseModalities: ['AUDIO'],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName } }
+      }
     }
   });
 
-  clientWs.on('close', () => elWs.close());
+  const base64Wav = response.candidates[0].content.parts[0].inlineData.data;
+  const wavBuffer = Buffer.from(base64Wav, 'base64');
+
+  res.setHeader('Content-Type', 'audio/wav');
+  res.end(wavBuffer);
 });
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log('EcoQuest Audio Gateway running on Render');
+app.listen(process.env.PORT || 3000, () => {
+  console.log('EcoQuest Gemini Voice Gateway running');
 });`;
 
   const spatialSnippet = `// Spatial Audio Compass: GPS Coordinates to StereoPannerNode Pan Value
@@ -181,7 +168,7 @@ export function createAudioReactivePetMaterial() {
           System Workflow Architecture
         </h2>
         <p className="text-xs font-mono text-stone-500 mt-2 max-w-2xl">
-          Tracing user actions from Live GPS updates through Render API Gateway, Tinker LLM speech prompts, ElevenLabs WebSockets, to Web Audio spatial stereo panning.
+          Tracing user actions from Live GPS updates through Express API Gateway, Gemini 3.8 conversational intelligence, to Gemini Neural Voice synthesis and Web Audio spectrum playback.
         </p>
       </div>
 
@@ -228,10 +215,10 @@ export function createAudioReactivePetMaterial() {
             STEP 04
           </div>
           <div className="text-sm font-semibold text-stone-900 dark:text-white mb-1">
-            ElevenLabs WS
+            Gemini Neural Voice
           </div>
           <p className="text-xs text-stone-500">
-            Ultra-low latency WebSocket streams high-fidelity binary audio chunks back to browser buffer.
+            Synthesizes warm human companion voices (Zephyr, Puck, Kore, Fenrir, Charon) with high-fidelity prosody and emotional cadence.
           </p>
         </div>
 

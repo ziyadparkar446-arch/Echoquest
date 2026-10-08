@@ -12,7 +12,7 @@ import {
   Footprints
 } from 'lucide-react';
 import { DailyNatureChallenge } from '../services/geminiMissionService';
-import { elevenLabsVoiceManager } from '../services/elevenLabsService';
+import { geminiVoiceManager } from '../services/geminiVoiceService';
 import { hapticFeedback } from '../utils/haptics';
 
 interface DailyChallengesViewProps {
@@ -39,8 +39,8 @@ export const DailyChallengesView: React.FC<DailyChallengesViewProps> = ({
 
   const handleListenChallenge = (c: DailyNatureChallenge) => {
     hapticFeedback.tactileClick();
-    elevenLabsVoiceManager.speak(`Daily challenge: ${c.title}. ${c.description}`, {
-      voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+    geminiVoiceManager.speak(`Daily challenge: ${c.title}. ${c.description}`, {
+      voiceId: geminiVoiceManager.getSelectedVoiceId(),
     });
   };
 

@@ -20,7 +20,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { MovementTelemetry, movementTrackingService } from '../services/movementTrackingService';
-import { elevenLabsVoiceManager } from '../services/elevenLabsService';
+import { geminiVoiceManager } from '../services/geminiVoiceService';
 import { hapticFeedback } from '../utils/haptics';
 
 export interface LocalityWaypoint {
@@ -196,11 +196,11 @@ export const LocalityGoogleMap: React.FC<LocalityGoogleMapProps> = ({
       const coords = await movementTrackingService.requestCurrentLocation();
       setShowUserLocationInfo(true);
       setIsFollowMode(true);
-      elevenLabsVoiceManager.speak(
+      geminiVoiceManager.speak(
         `GPS lock acquired. Your location is ${
           telemetry.localityName || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
         }.`,
-        { voiceId: elevenLabsVoiceManager.getSelectedVoiceId() }
+        { voiceId: geminiVoiceManager.getSelectedVoiceId() }
       );
     } finally {
       setIsLocating(false);
@@ -210,10 +210,10 @@ export const LocalityGoogleMap: React.FC<LocalityGoogleMapProps> = ({
   const handleSpeakWaypoint = (wp: LocalityWaypoint, e: React.MouseEvent) => {
     e.stopPropagation();
     hapticFeedback.buttonPress();
-    elevenLabsVoiceManager.speak(
+    geminiVoiceManager.speak(
       `Waypoint objective: ${wp.name}. ${wp.description}. Distance is ${wp.distanceMeters} meters away.`,
       {
-        voiceId: elevenLabsVoiceManager.getSelectedVoiceId(),
+        voiceId: geminiVoiceManager.getSelectedVoiceId(),
       }
     );
   };
@@ -479,9 +479,9 @@ export const LocalityGoogleMap: React.FC<LocalityGoogleMapProps> = ({
               if (activeWaypoint) {
                 hapticFeedback.missionComplete();
                 onWaypointCompleted(activeWaypoint.id);
-                elevenLabsVoiceManager.speak(
+                geminiVoiceManager.speak(
                   `Objective ${activeWaypoint.name} completed! Great observation, Scout. Marking waypoint complete.`,
-                  { voiceId: elevenLabsVoiceManager.getSelectedVoiceId() }
+                  { voiceId: geminiVoiceManager.getSelectedVoiceId() }
                 );
               }
             }}
