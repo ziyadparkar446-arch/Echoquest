@@ -50,8 +50,11 @@ import {
   VoiceRecognitionState,
   RecognizedVoiceCommand
 } from '../services/voiceRecognitionService';
-import { LocalityGoogleMap, LocalityWaypoint } from './LocalityGoogleMap';
+import { LocalityWaypoint } from '../types';
 import { hapticFeedback } from '../utils/haptics';
+import { OutdoorWeatherData } from '../services/weatherService';
+import { DynamicWeatherIcon } from './EnvironmentalWeatherPod';
+import { TacticalGoogleMap } from './TacticalGoogleMap';
 
 interface MissionHUDProps {
   gender: CharacterGender;
@@ -63,6 +66,12 @@ interface MissionHUDProps {
   onBackToCharacterSelect: () => void;
   onOpenDailyChallenges?: () => void;
   onOpenStickers?: () => void;
+  onOpenBioCards?: () => void;
+  onOpenWeather?: () => void;
+  onOpenBlueprint?: () => void;
+  weather?: OutdoorWeatherData | null;
+  isLoadingWeather?: boolean;
+  onRefreshWeather?: () => void;
   unlockedStickers: StickerEntry[];
   setUnlockedStickers: React.Dispatch<React.SetStateAction<StickerEntry[]>>;
   currentLevel: number;
@@ -89,6 +98,12 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
   onBackToCharacterSelect,
   onOpenDailyChallenges,
   onOpenStickers,
+  onOpenBioCards,
+  onOpenWeather,
+  onOpenBlueprint,
+  weather,
+  isLoadingWeather,
+  onRefreshWeather,
   unlockedStickers,
   setUnlockedStickers,
   currentLevel,
@@ -147,6 +162,27 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
   // GPS Nature Waypoints for Locality Google Map
   const [localWaypoints, setLocalWaypoints] = useState<LocalityWaypoint[]>([]);
   const [activeWaypoint, setActiveWaypoint] = useState<LocalityWaypoint | null>(null);
+  const [waypointSectionView, setWaypointSectionView] = useState<'map' | 'split' | 'cards'>('split');
+
+  // Compute live distance between current telemetry lat/lng and waypoints
+  const liveWaypoints = React.useMemo(() => {
+    return localWaypoints.map((wp) => {
+      const R = 6371e3;
+      const p1 = (telemetry.latitude * Math.PI) / 180;
+      const p2 = (wp.lat * Math.PI) / 180;
+      const dp = ((wp.lat - telemetry.latitude) * Math.PI) / 180;
+      const dl = ((wp.lng - telemetry.longitude) * Math.PI) / 180;
+      const a =
+        Math.sin(dp / 2) ** 2 +
+        Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const dist = Math.round(R * c);
+      return {
+        ...wp,
+        distanceMeters: dist,
+      };
+    });
+  }, [localWaypoints, telemetry.latitude, telemetry.longitude]);
 
   useEffect(() => {
     const baseLat = telemetry.latitude || 37.7749;
@@ -573,6 +609,22 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
 
         {/* Action Controls: Compact Speaker Pop Box & Pocket Mode */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Real-world Weather Status Button */}
+          {weather && (
+            <button
+              onClick={() => {
+                hapticFeedback.tactileClick();
+                if (onOpenWeather) onOpenWeather();
+              }}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-stone-200/90 hover:bg-stone-300 text-stone-900 font-mono text-[11px] sm:text-xs font-bold border-t border-white/60 shadow-[0_2px_0_0_#a8a29e] active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer"
+              title="View full atmospheric weather & trail conditions"
+            >
+              <DynamicWeatherIcon iconType={weather.iconType} className="w-3.5 h-3.5" />
+              <span className="tabular-nums">{weather.temperatureF}°F</span>
+              <span className="hidden md:inline text-stone-600">· {weather.conditionLabel}</span>
+            </button>
+          )}
+
           {/* COMPACT SPEAKER SWITCH BUTTON (OPENS SMALL POP BOX FOR MOBILE) */}
           <button
             onClick={() => {
@@ -940,42 +992,173 @@ export const MissionHUD: React.FC<MissionHUDProps> = ({
       </section>
 
       {/* =========================================================================
-          4. LOCALITY GOOGLE MAP (BROUGHT BACK PER USER REQUEST)
-          Shows real-world GPS location and nearby nature waypoints!
+          4. LOCALITY NATURE WAYPOINTS & GOOGLE MAPS GPS RADAR
+          Shows real-world GPS position, Google Map with live satellite, and nearby nature exploration waypoints!
           ========================================================================= */}
-      <section ref={mapSectionRef} className="space-y-2.5">
-        <div className="flex items-center justify-between">
+      <section ref={mapSectionRef} className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Compass className="w-4 h-4 text-emerald-700" />
             <h3 className="font-display font-extrabold text-sm sm:text-base text-stone-900">
-              Locality Outdoor Map (Google Maps)
+              Tactical Google Map & GPS Radar
             </h3>
           </div>
+
           <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1 bg-stone-200/80 p-0.5 rounded-xl border border-stone-300 text-xs font-mono">
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setWaypointSectionView('map');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  waypointSectionView === 'map'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-stone-700 hover:text-stone-900'
+                }`}
+              >
+                🗺️ Map View
+              </button>
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setWaypointSectionView('split');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  waypointSectionView === 'split'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-stone-700 hover:text-stone-900'
+                }`}
+              >
+                🔲 Split View
+              </button>
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setWaypointSectionView('cards');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  waypointSectionView === 'cards'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-stone-700 hover:text-stone-900'
+                }`}
+              >
+                📋 Cards Only
+              </button>
+            </div>
+
             <button
               onClick={() => {
                 movementTrackingService.requestCurrentLocation();
-                setFocusLocationTrigger((prev) => prev + 1);
               }}
               className="text-xs font-mono font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
             >
-              🎯 Center My Position
+              🎯 Refresh GPS
             </button>
-            <span className="text-xs font-mono text-stone-500">
-              {localWaypoints.filter((w) => w.completed).length}/{localWaypoints.length} Waypoints
-            </span>
           </div>
         </div>
 
-        <LocalityGoogleMap
-          telemetry={telemetry}
-          activeWaypoint={activeWaypoint}
-          waypoints={localWaypoints}
-          onSelectWaypoint={(wp) => setActiveWaypoint(wp)}
-          onWaypointCompleted={handleWaypointCompleted}
-          focusLocationTrigger={focusLocationTrigger}
-          onRequestLocation={() => setFocusLocationTrigger((prev) => prev + 1)}
-        />
+        {/* 4.A Tactical Google Map Layer */}
+        {(waypointSectionView === 'map' || waypointSectionView === 'split') && (
+          <TacticalGoogleMap
+            telemetry={telemetry}
+            waypoints={liveWaypoints}
+            activeWaypoint={activeWaypoint}
+            onSelectWaypoint={setActiveWaypoint}
+            explorerName={explorerName}
+          />
+        )}
+
+        {/* 4.B Tactical GPS & Waypoints Deck */}
+        {(waypointSectionView === 'split' || waypointSectionView === 'cards') && (
+          <div className="p-4 sm:p-5 rounded-3xl bg-stone-900 text-white border border-stone-800 shadow-xl space-y-4">
+            {/* Real-time GPS Header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-800 text-xs font-mono">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <Radio className="w-4 h-4 animate-pulse" />
+                <span className="font-bold">{telemetry.localityName || 'Local Outdoor Sector'}</span>
+                {telemetry.isSimulating && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
+                    SIMULATING WALK
+                  </span>
+                )}
+              </div>
+              <div className="text-stone-400 flex items-center gap-3">
+                <span>{telemetry.latitude.toFixed(4)}°N, {Math.abs(telemetry.longitude).toFixed(4)}°W</span>
+                <span className="text-stone-600">|</span>
+                <span className="text-emerald-400 font-bold">±{Math.round(telemetry.accuracy || 5)}m ACCURACY</span>
+              </div>
+            </div>
+
+            {/* Waypoints Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {liveWaypoints.map((wp) => {
+                const isSelected = activeWaypoint?.id === wp.id;
+                return (
+                  <div
+                    key={wp.id}
+                    onClick={() => {
+                      hapticFeedback.tactileClick();
+                      setActiveWaypoint(wp);
+                    }}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
+                      wp.completed
+                        ? 'bg-stone-950/70 border-stone-800 opacity-60'
+                        : isSelected
+                        ? 'bg-emerald-950/60 border-emerald-400 ring-2 ring-emerald-500/40 shadow-lg'
+                        : 'bg-stone-850 hover:bg-stone-800 border-stone-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{wp.icon}</span>
+                        <div>
+                          <h4 className="font-bold text-xs text-white leading-tight">{wp.name}</h4>
+                          <span className="text-[10px] font-mono text-emerald-400">{wp.category}</span>
+                        </div>
+                      </div>
+                      {wp.completed && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    </div>
+
+                    <p className="text-[11px] text-stone-300 font-sans leading-relaxed line-clamp-2">
+                      {wp.description}
+                    </p>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-stone-800 text-[10px] font-mono">
+                      <span className="text-stone-400">{wp.distanceMeters}m away</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            hapticFeedback.buttonPress();
+                            movementTrackingService.walkTowards(wp.lat, wp.lng);
+                          }}
+                          className="px-2 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 flex items-center gap-1 cursor-pointer"
+                          title="Simulate walking toward this waypoint"
+                        >
+                          <Footprints className="w-3 h-3 text-emerald-400" />
+                          <span>Walk</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            hapticFeedback.buttonPress();
+                            geminiVoiceManager.speak(`Waypoint: ${wp.name}. ${wp.description}. Distance is ${wp.distanceMeters} meters away.`);
+                          }}
+                          className="px-2 py-1 rounded bg-stone-700 hover:bg-stone-600 text-stone-200 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Volume2 className="w-3 h-3 text-emerald-400" />
+                          <span>Audio</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* =========================================================================

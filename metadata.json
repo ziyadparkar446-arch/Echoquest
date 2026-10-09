@@ -1,6 +1,6 @@
 {
   "name": "EcoQuest AI",
-  "description": "Voice-first outdoor gamification interface featuring interactive Google Maps, real-time GPS tracking, 3D character explorer, and bio-acoustic expeditions.",
+  "description": "Voice-first outdoor nature gamification interface featuring real-time Google Maps tactical radar, GPS movement simulation, 3D character explorer, and bio-acoustic expeditions.",
   "requestFramePermissions": [
     "geolocation",
     "microphone"

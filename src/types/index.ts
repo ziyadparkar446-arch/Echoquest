@@ -58,4 +58,18 @@ export interface EcoCard {
   audioFrequency: string;
 }
 
-export type GamePage = 'welcome' | 'playing' | 'map' | 'challenges' | 'stickers';
+export interface LocalityWaypoint {
+  id: string;
+  name: string;
+  category: 'Canopy' | 'Botanical' | 'Geo' | 'Fauna';
+  description: string;
+  audioPrompt: string;
+  lat: number;
+  lng: number;
+  icon: string;
+  completed: boolean;
+  distanceMeters: number;
+  bearingDegrees?: number;
+}
+
+export type GamePage = 'welcome' | 'playing' | 'challenges' | 'stickers' | 'biocards' | 'weather' | 'blueprint' | 'map';

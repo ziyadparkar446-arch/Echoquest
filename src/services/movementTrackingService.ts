@@ -16,6 +16,8 @@ export interface MovementTelemetry {
   longitude: number;
   accuracy: number;
   isGpsActive: boolean;
+  isSimulating?: boolean;
+  breadcrumbs?: Array<{ lat: number; lng: number }>;
   localityName?: string;
   activeMovementTask: string | null;
   lastStateChange: number;
@@ -39,6 +41,12 @@ class MovementTrackingService {
   private lastVerbalNudgeTime: number = 0;
 
   private isExpeditionActive: boolean = false;
+  private isSimulating: boolean = false;
+  private simSpeedMps: number = 1.4;
+  private simTargetLat: number | null = null;
+  private simTargetLng: number | null = null;
+  private simHeading: number = 45;
+  private breadcrumbs: Array<{ lat: number; lng: number }> = [];
 
   private telemetry: MovementTelemetry = {
     state: 'AT_REST',
@@ -53,6 +61,8 @@ class MovementTrackingService {
     longitude: -122.4194,
     accuracy: 10,
     isGpsActive: false,
+    isSimulating: false,
+    breadcrumbs: [],
     activeMovementTask: 'Put phone in pocket and take 20 paces forward to begin tracking.',
     lastStateChange: Date.now(),
   };
@@ -270,6 +280,61 @@ class MovementTrackingService {
   }
 
   private tickMovementState() {
+    if (this.isSimulating) {
+      // Advance coordinates along simulated trail
+      let headingRad = (this.simHeading * Math.PI) / 180;
+      if (this.simTargetLat !== null && this.simTargetLng !== null) {
+        // Calculate bearing towards target
+        const dLng = (this.simTargetLng - this.telemetry.longitude) * Math.PI / 180;
+        const y = Math.sin(dLng) * Math.cos(this.simTargetLat * Math.PI / 180);
+        const x = Math.cos(this.telemetry.latitude * Math.PI / 180) * Math.sin(this.simTargetLat * Math.PI / 180) -
+                  Math.sin(this.telemetry.latitude * Math.PI / 180) * Math.cos(this.simTargetLat * Math.PI / 180) * Math.cos(dLng);
+        const targetBearingDeg = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        this.simHeading = targetBearingDeg;
+        headingRad = (this.simHeading * Math.PI) / 180;
+
+        const distToTarget = this.calculateHaversineDistance(
+          this.telemetry.latitude,
+          this.telemetry.longitude,
+          this.simTargetLat,
+          this.simTargetLng
+        );
+        if (distToTarget < 6) {
+          this.simTargetLat = null;
+          this.simTargetLng = null;
+        }
+      } else {
+        // Natural wandering curve along a trail (+/- 2 degrees per sec)
+        this.simHeading = (this.simHeading + (Math.sin(Date.now() / 8000) * 3) + 360) % 360;
+        headingRad = (this.simHeading * Math.PI) / 180;
+      }
+
+      const metersPerSec = this.simSpeedMps;
+      const metersToLat = 1 / 111111;
+      const metersToLng = 1 / (111111 * Math.cos((this.telemetry.latitude * Math.PI) / 180));
+
+      const dLat = Math.cos(headingRad) * metersPerSec * metersToLat;
+      const dLng = Math.sin(headingRad) * metersPerSec * metersToLng;
+
+      this.telemetry.latitude += dLat;
+      this.telemetry.longitude += dLng;
+      this.telemetry.headingDegrees = Math.round(this.simHeading);
+      this.telemetry.speedMps = this.simSpeedMps;
+      this.telemetry.speedKmh = Math.round(this.simSpeedMps * 3.6 * 10) / 10;
+      this.telemetry.distanceCoveredMeters += Math.round(metersPerSec);
+      this.telemetry.stepCount += Math.max(1, Math.round(metersPerSec * 1.3));
+      this.telemetry.isSimulating = true;
+      this.telemetry.state = 'MOVING';
+
+      // Keep recent breadcrumbs trail for map visualization
+      const currentPt = { lat: this.telemetry.latitude, lng: this.telemetry.longitude };
+      this.breadcrumbs.push(currentPt);
+      if (this.breadcrumbs.length > 250) {
+        this.breadcrumbs.shift();
+      }
+      this.telemetry.breadcrumbs = [...this.breadcrumbs];
+    }
+
     const isMoving = this.telemetry.speedMps >= 0.5;
     const previousState = this.telemetry.state;
 
@@ -340,22 +405,78 @@ class MovementTrackingService {
     return tasks[Math.floor(Math.random() * tasks.length)];
   }
 
-  public simulateWalking() {
+  public startSimulation(speedMps: number = 1.4) {
+    this.isSimulating = true;
+    this.simSpeedMps = speedMps;
+    this.telemetry.isSimulating = true;
     this.telemetry.state = 'MOVING';
-    this.telemetry.speedMps = 1.4;
-    this.telemetry.speedKmh = 5.0;
-    this.telemetry.stepCount += 12;
-    this.telemetry.distanceCoveredMeters += 15;
-    this.telemetry.lastStateChange = Date.now();
+    this.telemetry.speedMps = speedMps;
+    this.telemetry.speedKmh = Math.round(speedMps * 3.6 * 10) / 10;
+    if (this.breadcrumbs.length === 0) {
+      this.breadcrumbs.push({ lat: this.telemetry.latitude, lng: this.telemetry.longitude });
+      this.telemetry.breadcrumbs = [...this.breadcrumbs];
+    }
     this.notify();
   }
 
-  public simulateRest() {
+  public stopSimulation() {
+    this.isSimulating = false;
+    this.telemetry.isSimulating = false;
     this.telemetry.state = 'AT_REST';
     this.telemetry.speedMps = 0;
     this.telemetry.speedKmh = 0;
-    this.telemetry.lastStateChange = Date.now();
     this.notify();
+  }
+
+  public toggleSimulation(speedMps: number = 1.4): boolean {
+    if (this.isSimulating) {
+      this.stopSimulation();
+      return false;
+    } else {
+      this.startSimulation(speedMps);
+      return true;
+    }
+  }
+
+  public isSimulatingWalk(): boolean {
+    return this.isSimulating;
+  }
+
+  public setSimSpeed(speedMps: number) {
+    this.simSpeedMps = Math.max(0.5, speedMps);
+    if (this.isSimulating) {
+      this.telemetry.speedMps = this.simSpeedMps;
+      this.telemetry.speedKmh = Math.round(this.simSpeedMps * 3.6 * 10) / 10;
+      this.notify();
+    }
+  }
+
+  public teleportTo(lat: number, lng: number, localityName?: string) {
+    this.telemetry.latitude = lat;
+    this.telemetry.longitude = lng;
+    if (localityName) {
+      this.telemetry.localityName = localityName;
+    } else {
+      this.fetchLocalityName(lat, lng);
+    }
+    this.breadcrumbs.push({ lat, lng });
+    if (this.breadcrumbs.length > 250) this.breadcrumbs.shift();
+    this.telemetry.breadcrumbs = [...this.breadcrumbs];
+    this.notify();
+  }
+
+  public walkTowards(targetLat: number, targetLng: number, speedMps: number = 1.4) {
+    this.simTargetLat = targetLat;
+    this.simTargetLng = targetLng;
+    this.startSimulation(speedMps);
+  }
+
+  public simulateWalking() {
+    this.toggleSimulation(1.4);
+  }
+
+  public simulateRest() {
+    this.stopSimulation();
   }
 
   public assignNewMovementTask(): string {

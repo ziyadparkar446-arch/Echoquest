@@ -7,11 +7,14 @@ import { PocketModeHUD } from './components/PocketModeHUD';
 import { NatureTopoBackground } from './components/NatureTopoBackground';
 import { WelcomeIntroOverlay } from './components/WelcomeIntroOverlay';
 import { StickerEntry } from './components/StickerBookModal';
-import { CharacterGender, OutfitColor, GamePage } from './types';
+import { BioCardsDeck } from './components/BioCardsDeck';
+import { EnvironmentalWeatherPod } from './components/EnvironmentalWeatherPod';
+import { ArchitectureBlueprint } from './components/ArchitectureBlueprint';
+import { TacticalGoogleMap } from './components/TacticalGoogleMap';
+import { CharacterGender, OutfitColor, GamePage, LocalityWaypoint } from './types';
 import { hapticFeedback } from './utils/haptics';
 import { geminiVoiceManager } from './services/geminiVoiceService';
 import { voiceRecognitionService } from './services/voiceRecognitionService';
-import { LocalityGoogleMap, LocalityWaypoint } from './components/LocalityGoogleMap';
 import {
   movementTrackingService,
   MovementTelemetry,
@@ -20,6 +23,10 @@ import {
   DailyNatureChallenge,
   fetchDailyNatureChallenges
 } from './services/geminiMissionService';
+import {
+  OutdoorWeatherData,
+  fetchCurrentWeather,
+} from './services/weatherService';
 import {
   ArrowRight,
   Smartphone,
@@ -34,6 +41,9 @@ import {
   MapPin,
   LocateFixed,
   Radio,
+  CloudSun,
+  Layers,
+  Cpu,
 } from 'lucide-react';
 
 export default function App() {
@@ -45,7 +55,6 @@ export default function App() {
   const [telemetry, setTelemetry] = useState<MovementTelemetry>(
     movementTrackingService.getTelemetry()
   );
-  const [mapFocusTrigger, setMapFocusTrigger] = useState(0);
 
   useEffect(() => {
     const unsub = movementTrackingService.subscribe((t) => {
@@ -53,6 +62,67 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Real-time Outdoor Atmospheric Weather Telemetry
+  const [weather, setWeather] = useState<OutdoorWeatherData | null>(null);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+
+  const loadWeather = async () => {
+    setIsWeatherLoading(true);
+    try {
+      const data = await fetchCurrentWeather(telemetry.latitude, telemetry.longitude, true);
+      setWeather(data);
+    } catch (err) {
+      console.warn('Weather fetch fallback:', err);
+    } finally {
+      setIsWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWeather();
+  }, [telemetry.latitude, telemetry.longitude]);
+
+  // Waypoints for full-screen Tactical Google Map
+  const [activeMapWaypoint, setActiveMapWaypoint] = useState<LocalityWaypoint | null>(null);
+  const appWaypoints: LocalityWaypoint[] = React.useMemo(() => [
+    {
+      id: 'wp-app-1',
+      name: 'Broad Fallen Leaves Cache',
+      category: 'Botanical',
+      description: 'Look beneath shaded oak or maple canopy for broad fallen leaves.',
+      audioPrompt: 'Find two broad fallen leaves on the ground for your craft dragon wings.',
+      lat: (telemetry.latitude || 37.7749) + 0.0006,
+      lng: (telemetry.longitude || -122.4194) + 0.0008,
+      icon: '🍃',
+      completed: false,
+      distanceMeters: 75,
+    },
+    {
+      id: 'wp-app-2',
+      name: 'Curved Twig Haven',
+      category: 'Canopy',
+      description: 'Search near fallen branches for a sturdy, curved dry twig.',
+      audioPrompt: 'Pick up one curved twig about the length of your hand for the dragon spine.',
+      lat: (telemetry.latitude || 37.7749) - 0.0005,
+      lng: (telemetry.longitude || -122.4194) + 0.0007,
+      icon: '🪵',
+      completed: false,
+      distanceMeters: 60,
+    },
+    {
+      id: 'wp-app-3',
+      name: 'Polished River Pebbles',
+      category: 'Geo',
+      description: 'Locate two smooth round pebbles on the path.',
+      audioPrompt: 'Gather two smooth pebbles from the soil to serve as glowing dragon eyes.',
+      lat: (telemetry.latitude || 37.7749) + 0.0003,
+      lng: (telemetry.longitude || -122.4194) - 0.0009,
+      icon: '🪨',
+      completed: false,
+      distanceMeters: 90,
+    },
+  ], [telemetry.latitude, telemetry.longitude]);
 
   // Welcome Intro Preloader
   const [showWelcomeIntro, setShowWelcomeIntro] = useState(true);
@@ -218,7 +288,7 @@ export default function App() {
         </div>
 
         {/* Zone 2: Navigation Bar (Tactile Segmented Control) */}
-        <nav className="flex items-center gap-1 p-1 bg-stone-300/75 backdrop-blur-xs rounded-xl text-xs font-mono border border-stone-400/40 shadow-inner">
+        <nav className="flex items-center gap-1 p-1 bg-stone-300/75 backdrop-blur-xs rounded-xl text-xs font-mono border border-stone-400/40 shadow-inner overflow-x-auto max-w-[calc(100vw-200px)] sm:max-w-none">
           {/* 01. EXPLORER (Character Selection) */}
           <button
             onClick={() => {
@@ -231,7 +301,7 @@ export default function App() {
                 : 'text-stone-700 hover:text-stone-900'
             }`}
           >
-            <span className="hidden lg:inline">01. </span>
+            <span className="hidden xl:inline">01. </span>
             <span>EXPLORER</span>
           </button>
 
@@ -247,29 +317,11 @@ export default function App() {
                 : 'text-stone-700 hover:text-stone-900'
             }`}
           >
-            <span className="hidden lg:inline">02. </span>
+            <span className="hidden xl:inline">02. </span>
             <span>MISSION</span>
           </button>
 
-          {/* 03. GOOGLE MAP & GPS RADAR */}
-          <button
-            onClick={() => {
-              hapticFeedback.tactileClick();
-              setCurrentPage('map');
-              movementTrackingService.requestCurrentLocation();
-            }}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all font-medium whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-              currentPage === 'map'
-                ? 'bg-stone-900 text-stone-50 font-bold shadow-[0_2px_0_0_#0c0a09]'
-                : 'text-stone-700 hover:text-stone-900'
-            }`}
-          >
-            <span className="hidden lg:inline">03. </span>
-            <span>MAP</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          </button>
-
-          {/* 04. DAILY CHALLENGES (Direct Nav Access) */}
+          {/* 03. DAILY CHALLENGES (Direct Nav Access) */}
           <button
             onClick={() => {
               hapticFeedback.tactileClick();
@@ -281,7 +333,7 @@ export default function App() {
                 : 'text-stone-700 hover:text-stone-900'
             }`}
           >
-            <span className="hidden lg:inline">04. </span>
+            <span className="hidden xl:inline">03. </span>
             <span>CHALLENGES</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-md font-bold ${
@@ -294,7 +346,7 @@ export default function App() {
             </span>
           </button>
 
-          {/* 05. MY STICKERS (Direct Nav Access) */}
+          {/* 04. MY STICKERS (Direct Nav Access) */}
           <button
             onClick={() => {
               hapticFeedback.tactileClick();
@@ -306,7 +358,7 @@ export default function App() {
                 : 'text-stone-700 hover:text-stone-900'
             }`}
           >
-            <span className="hidden lg:inline">05. </span>
+            <span className="hidden xl:inline">04. </span>
             <span>STICKERS</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-md font-bold ${
@@ -318,10 +370,93 @@ export default function App() {
               {unlockedStickers.length}
             </span>
           </button>
+
+          {/* 05. BIO CARDS (Ecosystem Pet Deck) */}
+          <button
+            onClick={() => {
+              hapticFeedback.tactileClick();
+              setCurrentPage('biocards');
+            }}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all font-medium whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              currentPage === 'biocards'
+                ? 'bg-stone-900 text-stone-50 font-bold shadow-[0_2px_0_0_#0c0a09]'
+                : 'text-stone-700 hover:text-stone-900'
+            }`}
+          >
+            <span className="hidden xl:inline">05. </span>
+            <span>BIO CARDS</span>
+          </button>
+
+          {/* 06. WEATHER (Atmospheric Sensors) */}
+          <button
+            onClick={() => {
+              hapticFeedback.tactileClick();
+              setCurrentPage('weather');
+            }}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all font-medium whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              currentPage === 'weather'
+                ? 'bg-stone-900 text-stone-50 font-bold shadow-[0_2px_0_0_#0c0a09]'
+                : 'text-stone-700 hover:text-stone-900'
+            }`}
+          >
+            <span className="hidden xl:inline">06. </span>
+            <span>WEATHER</span>
+            {weather && (
+              <span className="text-[10px] font-bold text-emerald-800 bg-stone-200 px-1 rounded">
+                {weather.temperatureF}°
+              </span>
+            )}
+          </button>
+
+          {/* 07. BLUEPRINT (Spatial Architecture) */}
+          <button
+            onClick={() => {
+              hapticFeedback.tactileClick();
+              setCurrentPage('blueprint');
+            }}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all font-medium whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              currentPage === 'blueprint'
+                ? 'bg-stone-900 text-stone-50 font-bold shadow-[0_2px_0_0_#0c0a09]'
+                : 'text-stone-700 hover:text-stone-900'
+            }`}
+          >
+            <span className="hidden xl:inline">07. </span>
+            <span>BLUEPRINT</span>
+          </button>
+
+          {/* 08. MAP (Tactical Google Map) */}
+          <button
+            onClick={() => {
+              hapticFeedback.tactileClick();
+              setCurrentPage('map');
+            }}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all font-medium whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              currentPage === 'map'
+                ? 'bg-stone-900 text-stone-50 font-bold shadow-[0_2px_0_0_#0c0a09]'
+                : 'text-stone-700 hover:text-stone-900'
+            }`}
+          >
+            <span className="hidden xl:inline">08. </span>
+            <span>MAP</span>
+          </button>
         </nav>
 
         {/* Zone 3: Quick Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {weather && (
+            <button
+              onClick={() => {
+                hapticFeedback.tactileClick();
+                setCurrentPage('weather');
+              }}
+              title="Click for full outdoor weather & trail report"
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 bg-stone-200/90 hover:bg-stone-300 text-stone-800 text-xs font-mono font-bold rounded-lg transition-colors border border-stone-300 cursor-pointer"
+            >
+              <span>{weather.emoji}</span>
+              <span>{weather.temperatureF}°F</span>
+            </button>
+          )}
+
           <button
             onClick={handleReplayIntro}
             title="Replay Welcome Intro Animation"
@@ -545,24 +680,69 @@ export default function App() {
               <ArrowRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform ml-auto" />
             </button>
 
-            {/* Direct Google Map Actuator */}
+            {/* Direct Daily Challenges Actuator */}
             <button
               onClick={() => {
                 hapticFeedback.tactileClick();
-                setCurrentPage('map');
-                movementTrackingService.requestCurrentLocation();
+                setCurrentPage('challenges');
               }}
               className="w-full py-3 px-5 bg-stone-200/90 hover:bg-stone-300 text-stone-900 font-mono text-xs font-bold rounded-2xl transition-all border border-stone-300 shadow-sm flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Compass className="w-4 h-4 text-emerald-700" />
-              <span>VIEW INTERACTIVE GOOGLE MAP & LOCATION</span>
+              <Sparkles className="w-4 h-4 text-emerald-700" />
+              <span>VIEW DAILY NATURE CHALLENGES ({completedChallengesCount}/{dailyChallenges.length})</span>
             </button>
+            {/* Direct Feature Launchers Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setCurrentPage('map');
+                }}
+                className="p-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+              >
+                <Compass className="w-4 h-4 text-emerald-700" />
+                <span>Google Map</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setCurrentPage('biocards');
+                }}
+                className="p-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+              >
+                <Layers className="w-4 h-4 text-emerald-700" />
+                <span>Bio Cards</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setCurrentPage('weather');
+                }}
+                className="p-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+              >
+                <CloudSun className="w-4 h-4 text-amber-600" />
+                <span>Weather Pod</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  hapticFeedback.tactileClick();
+                  setCurrentPage('blueprint');
+                }}
+                className="p-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-mono text-[11px] font-bold border border-stone-300 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+              >
+                <Cpu className="w-4 h-4 text-purple-700" />
+                <span>Blueprint</span>
+              </button>
+            </div>
           </div>
         </main>
       )}
 
       {/* =========================================================================
-          PAGE 2: PLAYING GAME (MISSION HUD, 3D HERO STAGE, GOOGLE MAPS, EASY UI)
+          PAGE 2: PLAYING GAME (MISSION HUD, 3D HERO STAGE, NATURE GPS, EASY UI)
           No virtual map! Minimal text, hands-free earphone voice first!
           ========================================================================= */}
       {currentPage === 'playing' && (
@@ -577,6 +757,12 @@ export default function App() {
             onBackToCharacterSelect={() => setCurrentPage('welcome')}
             onOpenDailyChallenges={() => setCurrentPage('challenges')}
             onOpenStickers={() => setCurrentPage('stickers')}
+            onOpenBioCards={() => setCurrentPage('biocards')}
+            onOpenWeather={() => setCurrentPage('weather')}
+            onOpenBlueprint={() => setCurrentPage('blueprint')}
+            weather={weather}
+            isLoadingWeather={isWeatherLoading}
+            onRefreshWeather={loadWeather}
             unlockedStickers={unlockedStickers}
             setUnlockedStickers={setUnlockedStickers}
             currentLevel={currentLevel}
@@ -584,129 +770,6 @@ export default function App() {
             totalXp={totalXp}
             setTotalXp={setTotalXp}
             dailyChallenges={dailyChallenges}
-          />
-        </main>
-      )}
-
-      {/* =========================================================================
-          PAGE 3: DEDICATED FULL-SCREEN GOOGLE MAP & GPS LOCALITY RADAR
-          ========================================================================= */}
-      {currentPage === 'map' && (
-        <main className="relative z-10 min-h-[calc(100vh-69px)] p-3 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-stone-200/80 backdrop-blur-md rounded-2xl border border-stone-300 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-stone-900 text-emerald-400 flex items-center justify-center font-bold text-lg shadow-md">
-                <Compass className="w-5 h-5 text-emerald-400 animate-spin" style={{ animationDuration: '12s' }} />
-              </div>
-              <div>
-                <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider">
-                  REAL-TIME SATELLITE & TACTICAL NAVIGATION
-                </span>
-                <h2 className="text-xl sm:text-2xl font-display font-extrabold text-stone-900">
-                  Google Maps Platform Explorer
-                </h2>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={async () => {
-                  hapticFeedback.buttonPress();
-                  const coords = await movementTrackingService.requestCurrentLocation();
-                  setMapFocusTrigger((prev) => prev + 1);
-                  geminiVoiceManager.speak(
-                    `Centering map on your GPS coordinates: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}.`,
-                    { voiceId: geminiVoiceManager.getSelectedVoiceId() }
-                  );
-                }}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
-              >
-                <LocateFixed className="w-4 h-4" />
-                <span>LOCATE ME (GPS FIX)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Real-World Telemetry Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-            <div className="p-3 rounded-xl bg-stone-200/70 border border-stone-300">
-              <div className="text-[10px] text-stone-500 uppercase">LOCALITY</div>
-              <div className="font-bold text-stone-900 truncate">
-                {telemetry.localityName || 'Locating area...'}
-              </div>
-            </div>
-            <div className="p-3 rounded-xl bg-stone-200/70 border border-stone-300">
-              <div className="text-[10px] text-stone-500 uppercase">COORDINATES</div>
-              <div className="font-bold text-emerald-800">
-                {telemetry.latitude.toFixed(4)}°, {telemetry.longitude.toFixed(4)}°
-              </div>
-            </div>
-            <div className="p-3 rounded-xl bg-stone-200/70 border border-stone-300">
-              <div className="text-[10px] text-stone-500 uppercase">GPS ACCURACY</div>
-              <div className="font-bold text-stone-900">
-                ±{Math.round(telemetry.accuracy || 5)} meters
-              </div>
-            </div>
-            <div className="p-3 rounded-xl bg-stone-200/70 border border-stone-300">
-              <div className="text-[10px] text-stone-500 uppercase">MOVEMENT</div>
-              <div className="font-bold text-stone-900">
-                {telemetry.state === 'MOVING' ? `Walking (${telemetry.speedMps} m/s)` : 'Stationary'}
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Google Map */}
-          <LocalityGoogleMap
-            telemetry={telemetry}
-            activeWaypoint={null}
-            waypoints={[
-              {
-                id: 'map-wp-1',
-                name: 'Mature Canopy Trees',
-                category: 'Canopy',
-                description: 'Search for fallen broad leaves and textured bark specimens.',
-                audioPrompt: 'Scan the ground near the canopy trees.',
-                lat: telemetry.latitude + 0.0007,
-                lng: telemetry.longitude + 0.0009,
-                icon: '🌲',
-                completed: false,
-                distanceMeters: 85,
-              },
-              {
-                id: 'map-wp-2',
-                name: 'Botanical Foliage Cache',
-                category: 'Botanical',
-                description: 'Lush ground vegetation with diverse wild plant specimens.',
-                audioPrompt: 'Look for intact leaf veins and natural colors.',
-                lat: telemetry.latitude - 0.0006,
-                lng: telemetry.longitude + 0.0008,
-                icon: '🍃',
-                completed: false,
-                distanceMeters: 70,
-              },
-              {
-                id: 'map-wp-3',
-                name: 'Riverbed Stone Deposit',
-                category: 'Geo',
-                description: 'Smooth mineral pebbles and natural gravel.',
-                audioPrompt: 'Collect two smooth pebbles for crafting.',
-                lat: telemetry.latitude + 0.0004,
-                lng: telemetry.longitude - 0.0007,
-                icon: '🪨',
-                completed: false,
-                distanceMeters: 95,
-              },
-            ]}
-            onSelectWaypoint={(wp) => {
-              geminiVoiceManager.speak(`Selected ${wp.name}. ${wp.description}`, {
-                voiceId: geminiVoiceManager.getSelectedVoiceId(),
-              });
-            }}
-            onWaypointCompleted={() => {
-              setTotalXp((xp) => xp + 100);
-            }}
-            focusLocationTrigger={mapFocusTrigger}
-            onRequestLocation={() => setMapFocusTrigger((prev) => prev + 1)}
           />
         </main>
       )}
@@ -736,6 +799,123 @@ export default function App() {
           <StickerAlbumView
             unlockedStickers={unlockedStickers}
             onStartMission={() => setCurrentPage('playing')}
+          />
+        </main>
+      )}
+
+      {/* =========================================================================
+          PAGE 5: ECOSYSTEM BIO CARDS & 3D PET COMPANION DECK
+          ========================================================================= */}
+      {currentPage === 'biocards' && (
+        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-stone-300">
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider">
+                BIOLOGICAL ARTIFACT CODEX
+              </span>
+              <h2 className="text-xl sm:text-2xl font-display font-extrabold text-stone-900">
+                Ecosystem Specimen Deck & Pet Companion
+              </h2>
+            </div>
+            <button
+              onClick={() => setCurrentPage('playing')}
+              className="px-3.5 py-1.5 rounded-xl bg-stone-900 text-stone-50 font-mono text-xs font-bold hover:bg-stone-800 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TO MISSION</span>
+            </button>
+          </div>
+          <BioCardsDeck onStartMission={() => setCurrentPage('playing')} />
+        </main>
+      )}
+
+      {/* =========================================================================
+          PAGE 6: REAL-TIME ATMOSPHERIC WEATHER & TRAIL CONDITIONS
+          ========================================================================= */}
+      {currentPage === 'weather' && (
+        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-4xl mx-auto space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-stone-300">
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider">
+                FIELD INSTRUMENTATION
+              </span>
+              <h2 className="text-xl sm:text-2xl font-display font-extrabold text-stone-900">
+                Atmospheric Weather & Trail Sensors
+              </h2>
+            </div>
+            <button
+              onClick={() => setCurrentPage('playing')}
+              className="px-3.5 py-1.5 rounded-xl bg-stone-900 text-stone-50 font-mono text-xs font-bold hover:bg-stone-800 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TO MISSION</span>
+            </button>
+          </div>
+          <EnvironmentalWeatherPod
+            weather={weather}
+            isLoading={isWeatherLoading}
+            onRefreshWeather={loadWeather}
+            onStartMission={() => setCurrentPage('playing')}
+            variant="full"
+          />
+        </main>
+      )}
+
+      {/* =========================================================================
+          PAGE 7: SYSTEM ARCHITECTURE & SPATIAL AUDIO BLUEPRINT
+          ========================================================================= */}
+      {currentPage === 'blueprint' && (
+        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-stone-300">
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase text-purple-800 tracking-wider">
+                ENGINEERING SPECIFICATIONS
+              </span>
+              <h2 className="text-xl sm:text-2xl font-display font-extrabold text-stone-900">
+                System Blueprint & Spatial Audio Compass
+              </h2>
+            </div>
+            <button
+              onClick={() => setCurrentPage('playing')}
+              className="px-3.5 py-1.5 rounded-xl bg-stone-900 text-stone-50 font-mono text-xs font-bold hover:bg-stone-800 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TO MISSION</span>
+            </button>
+          </div>
+          <ArchitectureBlueprint />
+        </main>
+      )}
+
+      {/* =========================================================================
+          PAGE 8: FULL TACTICAL GOOGLE MAP & REAL-WORLD SATELLITE RADAR
+          ========================================================================= */}
+      {currentPage === 'map' && (
+        <main className="relative z-10 min-h-[calc(100vh-69px)] py-6 px-3 sm:px-6 max-w-6xl mx-auto space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-stone-300">
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 tracking-wider">
+                TACTICAL RADAR · GOOGLE MAPS PLATFORM
+              </span>
+              <h2 className="text-xl sm:text-2xl font-display font-extrabold text-stone-900">
+                Satellite Field Radar & Waypoints
+              </h2>
+            </div>
+            <button
+              onClick={() => setCurrentPage('playing')}
+              className="px-3.5 py-1.5 rounded-xl bg-stone-900 text-stone-50 font-mono text-xs font-bold hover:bg-stone-800 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TO MISSION</span>
+            </button>
+          </div>
+
+          <TacticalGoogleMap
+            telemetry={telemetry}
+            waypoints={appWaypoints}
+            activeWaypoint={activeMapWaypoint}
+            onSelectWaypoint={setActiveMapWaypoint}
+            explorerName={explorerName}
           />
         </main>
       )}

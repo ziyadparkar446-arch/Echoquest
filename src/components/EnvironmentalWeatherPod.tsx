@@ -24,6 +24,7 @@ interface EnvironmentalWeatherPodProps {
   isLoading: boolean;
   onRefreshWeather: () => void;
   variant?: 'full' | 'compact';
+  onStartMission?: () => void;
 }
 
 /**
@@ -64,6 +65,7 @@ export const EnvironmentalWeatherPod: React.FC<EnvironmentalWeatherPodProps> = (
   isLoading,
   onRefreshWeather,
   variant = 'full',
+  onStartMission,
 }) => {
   const handleSyncClick = () => {
     hapticFeedback.tactileClick();
@@ -225,14 +227,26 @@ export const EnvironmentalWeatherPod: React.FC<EnvironmentalWeatherPodProps> = (
           <span>Real-time outdoor sensors update mission context dynamically.</span>
         </div>
 
-        <button
-          onClick={handleSyncClick}
-          disabled={isLoading}
-          className="relative py-2.5 px-4 rounded-xl font-mono text-xs font-bold uppercase tracking-wider text-stone-100 select-none cursor-pointer bg-stone-800 hover:bg-stone-750 active:bg-stone-800 border-t border-stone-600/50 shadow-[0_3px_0_0_#09090b] active:shadow-[0_1px_0_0_#09090b] active:translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>{isLoading ? 'SYNCING GPS SENSORS...' : 'SYNC GEOLOCATION & WEATHER'}</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleSyncClick}
+            disabled={isLoading}
+            className="relative py-2.5 px-4 rounded-xl font-mono text-xs font-bold uppercase tracking-wider text-stone-100 select-none cursor-pointer bg-stone-800 hover:bg-stone-750 active:bg-stone-800 border-t border-stone-600/50 shadow-[0_3px_0_0_#09090b] active:shadow-[0_1px_0_0_#09090b] active:translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>{isLoading ? 'SYNCING GPS SENSORS...' : 'SYNC GEOLOCATION & WEATHER'}</span>
+          </button>
+
+          {onStartMission && (
+            <button
+              onClick={onStartMission}
+              className="relative py-2.5 px-4 rounded-xl font-mono text-xs font-bold uppercase tracking-wider text-stone-900 select-none cursor-pointer bg-emerald-400 hover:bg-emerald-300 active:bg-emerald-400 border-t border-emerald-200 shadow-[0_3px_0_0_#064e3b] active:translate-y-0.5 transition-all flex items-center gap-2"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>START EXPEDITION</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ import {
   geminiVoiceManager,
   HumanVoice,
 } from '../services/geminiVoiceService';
-import { LocalityWaypoint } from './LocalityGoogleMap';
+import { LocalityWaypoint } from '../types';
 import { GeneratedMission } from '../services/geminiMissionService';
 import { hapticFeedback } from '../utils/haptics';
 

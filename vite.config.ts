@@ -5,11 +5,6 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    define: {
-      'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(
-        process.env.VITE_GOOGLE_MAPS_API_KEY || ''
-      ),
-    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

@@ -95,7 +95,11 @@ const CARDS: BioCard[] = [
   },
 ];
 
-export const BioCardsDeck: React.FC = () => {
+interface BioCardsDeckProps {
+  onStartMission?: () => void;
+}
+
+export const BioCardsDeck: React.FC<BioCardsDeckProps> = ({ onStartMission }) => {
   const [selectedCardId, setSelectedCardId] = useState<string>('card-1');
   const [activeCompanionId, setActiveCompanionId] = useState<string>('card-1');
 
@@ -192,7 +196,7 @@ export const BioCardsDeck: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveCompanionId(activeCard.id)}
-              className={`px-5 py-2.5 rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-2 ${
+              className={`px-5 py-2.5 rounded-lg text-xs font-mono font-semibold transition-colors flex items-center gap-2 cursor-pointer ${
                 activeCompanionId === activeCard.id
                   ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
                   : 'bg-emerald-600 hover:bg-emerald-500 text-stone-950 shadow-sm'
@@ -201,6 +205,16 @@ export const BioCardsDeck: React.FC = () => {
               <Sparkles className="w-3.5 h-3.5" />
               <span>{activeCompanionId === activeCard.id ? 'ACTIVE 3D COMPANION' : 'SET AS 3D PET COMPANION'}</span>
             </button>
+
+            {onStartMission && (
+              <button
+                onClick={onStartMission}
+                className="px-5 py-2.5 rounded-lg text-xs font-mono font-semibold bg-stone-100 hover:bg-white text-stone-900 transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <span>LAUNCH EXPEDITION</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
